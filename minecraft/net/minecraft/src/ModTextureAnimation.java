@@ -1,81 +1,122 @@
+/*
+ * The FML Forge Mod Loader suite.
+ * Copyright (C) 2012 cpw
+ *
+ * This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 package net.minecraft.src;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import net.minecraft.client.Minecraft;
+import java.awt.image.ImageObserver;
+
+import net.minecraft.client.renderer.RenderEngine;
+
 import org.lwjgl.opengl.GL11;
 
-public class ModTextureAnimation extends TextureFX
+import cpw.mods.fml.client.FMLClientHandler;
+import cpw.mods.fml.client.FMLTextureFX;
+
+/**
+ * A texture override for animations, it takes a vertical image of
+ * texture frames and constantly rotates them in the texture.
+ */
+public class ModTextureAnimation extends FMLTextureFX
 {
     private final int tickRate;
-    private final byte images[][];
-    private int index;
-    private int ticks;
+    private byte[][] images;
+    private int index = 0;
+    private int ticks = 0;
 
-    public ModTextureAnimation(int i, int j, BufferedImage bufferedimage, int k)
+    private String targetTex = null;
+    private BufferedImage imgData = null;
+
+    public ModTextureAnimation(int icon, int target, BufferedImage image, int tickCount)
     {
-        this(i, 1, j, bufferedimage, k);
+        this(icon, 1, target, image, tickCount);
     }
 
-    public ModTextureAnimation(int i, int j, int k, BufferedImage bufferedimage, int l)
+    public ModTextureAnimation(int icon, int size, int target, BufferedImage image, int tickCount)
     {
-        super(i);
-        index = 0;
-        ticks = 0;
-        tileSize = j;
-        tileImage = k;
-        tickRate = l;
-        ticks = l;
-        bindImage(ModLoader.getMinecraftInstance().renderEngine);
-        int i1 = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH) / 16;
-        int j1 = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT) / 16;
-        int k1 = bufferedimage.getWidth();
-        int l1 = bufferedimage.getHeight();
-        int i2 = (int)Math.floor(l1 / k1);
+        this(icon, size, (target == 0 ? "/terrain.png" : "/gui/items.png"), image, tickCount);
+    }
 
-        if (i2 <= 0)
+    public ModTextureAnimation(int icon, int size, String target, BufferedImage image, int tickCount)
+    {
+        super(icon);
+        RenderEngine re = FMLClientHandler.instance().getClient().renderEngine;
+
+        targetTex = target;
+        tileSize = size;
+        tileImage = re.getTexture(target);
+
+        tickRate = tickCount;
+        ticks = tickCount;
+        imgData = image;
+    }
+
+    @Override
+    public void setup()
+    {
+        super.setup();
+
+        int sWidth  = imgData.getWidth();
+        int sHeight = imgData.getHeight();
+        int tWidth  = tileSizeBase;
+        int tHeight = tileSizeBase;
+
+
+        int frames = (int)Math.floor((double)(sHeight / sWidth));
+
+        if (frames < 1)
         {
-            throw new IllegalArgumentException("source has no complete images");
+            throw new IllegalArgumentException(String.format("Attempted to create a TextureAnimation with no complete frames: %dx%d", sWidth, sHeight));
         }
-
-        images = new byte[i2][];
-
-        if (k1 != i1)
+        else
         {
-            BufferedImage bufferedimage1 = new BufferedImage(i1, j1 * i2, 6);
-            Graphics2D graphics2d = bufferedimage1.createGraphics();
-            graphics2d.drawImage(bufferedimage, 0, 0, i1, j1 * i2, 0, 0, k1, l1, null);
-            graphics2d.dispose();
-            bufferedimage = bufferedimage1;
-        }
+            images = new byte[frames][];
+            BufferedImage image = imgData;
 
-        for (int j2 = 0; j2 < i2; j2++)
-        {
-            int ai[] = new int[i1 * j1];
-            bufferedimage.getRGB(0, j1 * j2, i1, j1, ai, 0, i1);
-            images[j2] = new byte[i1 * j1 * 4];
-
-            for (int k2 = 0; k2 < ai.length; k2++)
+            if (sWidth != tWidth)
             {
-                int l2 = ai[k2] >> 24 & 0xff;
-                int i3 = ai[k2] >> 16 & 0xff;
-                int j3 = ai[k2] >> 8 & 0xff;
-                int k3 = ai[k2] >> 0 & 0xff;
-                images[j2][k2 * 4 + 0] = (byte)i3;
-                images[j2][k2 * 4 + 1] = (byte)j3;
-                images[j2][k2 * 4 + 2] = (byte)k3;
-                images[j2][k2 * 4 + 3] = (byte)l2;
+                BufferedImage b = new BufferedImage(tWidth, tHeight * frames, 6);
+                Graphics2D g = b.createGraphics();
+                g.drawImage(imgData, 0, 0, tWidth, tHeight * frames, 0, 0, sWidth, sHeight, (ImageObserver)null);
+                g.dispose();
+                image = b;
+            }
+
+            for (int frame = 0; frame < frames; frame++)
+            {
+                int[] pixels = new int[tileSizeSquare];
+                image.getRGB(0, tHeight * frame, tWidth, tHeight, pixels, 0, tWidth);
+                images[frame] = new byte[tileSizeSquare << 2];
+
+                for (int i = 0; i < pixels.length; i++)
+                {
+                    int i4 = i * 4;
+                    images[frame][i4 + 0] = (byte)(pixels[i] >> 16 & 255);
+                    images[frame][i4 + 1] = (byte)(pixels[i] >> 8  & 255);
+                    images[frame][i4 + 2] = (byte)(pixels[i] >> 0  & 255);
+                    images[frame][i4 + 3] = (byte)(pixels[i] >> 24 & 255);
+                }
             }
         }
     }
 
     public void onTick()
     {
-        if (ticks >= tickRate)
+        if (++ticks >= tickRate)
         {
-            index++;
-
-            if (index >= images.length)
+            if (++index >= images.length)
             {
                 index = 0;
             }
@@ -83,7 +124,18 @@ public class ModTextureAnimation extends TextureFX
             imageData = images[index];
             ticks = 0;
         }
-
-        ticks++;
     }
+
+    public void bindImage(RenderEngine renderEngine)
+    {
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, tileImage);
+    }
+
+    // TODO: REMOVE THIS - just for you dan200
+    @Deprecated
+    public void func_783_a()
+    {
+        onTick();
+    }
+
 }

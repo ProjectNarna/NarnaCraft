@@ -1,164 +1,183 @@
+/*
+ * The FML Forge Mod Loader suite.
+ * Copyright (C) 2012 cpw
+ *
+ * This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
 package net.minecraft.src;
+
+import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import net.minecraft.client.Minecraft;
+import java.awt.image.ImageObserver;
+
+import net.minecraft.client.renderer.RenderEngine;
+
 import org.lwjgl.opengl.GL11;
 
-public class ModTextureStatic extends TextureFX
-{
-    private boolean oldanaglyph;
-    private int pixels[];
+import cpw.mods.fml.client.FMLClientHandler;
+import cpw.mods.fml.client.FMLTextureFX;
 
-    public ModTextureStatic(int i, int j, BufferedImage bufferedimage)
+public class ModTextureStatic extends FMLTextureFX
+{
+    private boolean oldanaglyph = false;
+    private int[] pixels = null;
+    private String targetTex = null;
+    private int storedSize;
+    private BufferedImage overrideData = null;
+    private int needApply = 10;
+
+
+    public ModTextureStatic(int icon, int target, BufferedImage image)
     {
-        this(i, 1, j, bufferedimage);
+        this(icon, 1, target, image);
     }
 
-    public ModTextureStatic(int i, int j, int k, BufferedImage bufferedimage)
+    public ModTextureStatic(int icon, int size, int target, BufferedImage image)
     {
-        super(i);
-        pixels = null;
-        tileSize = j;
-        tileImage = k;
-        bindImage(ModLoader.getMinecraftInstance().renderEngine);
-        int l = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH) / 16;
-        int i1 = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT) / 16;
-        int j1 = bufferedimage.getWidth();
-        int k1 = bufferedimage.getHeight();
-        pixels = new int[l * i1];
-        imageData = new byte[l * i1 * 4];
+        this(icon, size, (target == 0 ? "/terrain.png" : "/gui/items.png"), image);
+    }
 
-        if (j1 != k1 || j1 != l)
+    public ModTextureStatic(int icon, int size, String target, BufferedImage image)
+    {
+        super(icon);
+        RenderEngine re = FMLClientHandler.instance().getClient().renderEngine;
+
+        targetTex = target;
+        storedSize = size;
+        tileSize = size;
+        tileImage = re.getTexture(target);
+        overrideData = image;
+    }
+
+    @Override
+    public void setup()
+    {
+        super.setup();
+        int sWidth  = overrideData.getWidth();
+        int sHeight = overrideData.getHeight();
+
+        pixels = new int[tileSizeSquare];
+        if (tileSizeBase == sWidth && tileSizeBase == sHeight)
         {
-            BufferedImage bufferedimage1 = new BufferedImage(l, i1, 6);
-            Graphics2D graphics2d = bufferedimage1.createGraphics();
-            graphics2d.drawImage(bufferedimage, 0, 0, l, i1, 0, 0, j1, k1, null);
-            bufferedimage1.getRGB(0, 0, l, i1, pixels, 0, l);
-            graphics2d.dispose();
+            overrideData.getRGB(0, 0, sWidth, sHeight, pixels, 0, sWidth);
         }
         else
         {
-            bufferedimage.getRGB(0, 0, j1, k1, pixels, 0, j1);
+            BufferedImage tmp = new BufferedImage(tileSizeBase, tileSizeBase, 6);
+            Graphics2D gfx = tmp.createGraphics();
+            gfx.drawImage(overrideData, 0, 0, tileSizeBase, tileSizeBase, 0, 0, sWidth, sHeight, (ImageObserver)null);
+            tmp.getRGB(0, 0, tileSizeBase, tileSizeBase, pixels, 0, tileSizeBase);
+            gfx.dispose();
         }
 
         update();
     }
 
-    public void update()
-    {
-        for (int i = 0; i < pixels.length; i++)
-        {
-            int j = pixels[i] >> 24 & 0xff;
-            int k = pixels[i] >> 16 & 0xff;
-            int l = pixels[i] >> 8 & 0xff;
-            int i1 = pixels[i] >> 0 & 0xff;
-
-            if (anaglyphEnabled)
-            {
-                int j1 = (k + l + i1) / 3;
-                k = l = i1 = j1;
-            }
-
-            imageData[i * 4 + 0] = (byte)k;
-            imageData[i * 4 + 1] = (byte)l;
-            imageData[i * 4 + 2] = (byte)i1;
-            imageData[i * 4 + 3] = (byte)j;
-        }
-
-        oldanaglyph = anaglyphEnabled;
-    }
-
+    @Override
     public void onTick()
     {
         if (oldanaglyph != anaglyphEnabled)
         {
             update();
         }
+        // This makes it so we only apply the texture to the target texture when we need to,
+        //due to the fact that update is called when the Effect is first registered, we actually
+        //need to wait for the next one.
+        tileSize = (needApply == 0 ? 0 : storedSize);
+        if (needApply > 0)
+        {
+            needApply--;
+        }
     }
 
-    public static BufferedImage scale2x(BufferedImage bufferedimage)
+    @Override
+    public void bindImage(RenderEngine par1RenderEngine)
     {
-        int j2 = bufferedimage.getWidth();
-        int k2 = bufferedimage.getHeight();
-        BufferedImage bufferedimage1 = new BufferedImage(j2 * 2, k2 * 2, 2);
+        GL11.glBindTexture(GL_TEXTURE_2D, par1RenderEngine.getTexture(targetTex));
+    }
 
-        for (int l2 = 0; l2 < k2; l2++)
+    public void update()
+    {
+        needApply = 10;
+        for (int idx = 0; idx < pixels.length; idx++)
         {
-            for (int i3 = 0; i3 < j2; i3++)
+            int i = idx * 4;
+            int a = pixels[idx] >> 24 & 255;
+            int r = pixels[idx] >> 16 & 255;
+            int g = pixels[idx] >> 8 & 255;
+            int b = pixels[idx] >> 0 & 255;
+
+            if (anaglyphEnabled)
             {
-                int i = bufferedimage.getRGB(i3, l2);
-                int j1;
+                r = g = b = (r + g + b) / 3;
+            }
 
-                if (l2 == 0)
+            imageData[i + 0] = (byte)r;
+            imageData[i + 1] = (byte)g;
+            imageData[i + 2] = (byte)b;
+            imageData[i + 3] = (byte)a;
+        }
+
+        oldanaglyph = anaglyphEnabled;
+    }
+
+    //Implementation of http://scale2x.sourceforge.net/algorithm.html
+    public static BufferedImage scale2x(BufferedImage image)
+    {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        BufferedImage tmp = new BufferedImage(w * 2, h * 2, 2);
+
+        for (int x = 0; x < h; ++x)
+        {
+            int x2 = x * 2;
+            for (int y = 0; y < w; ++y)
+            {
+                int y2 = y * 2;
+                int E = image.getRGB(y, x);
+                int D = (x == 0     ? E : image.getRGB(y,     x - 1));
+                int B = (y == 0     ? E : image.getRGB(y - 1, x    ));
+                int H = (y >= w - 1 ? E : image.getRGB(y + 1, x    ));
+                int F = (x >= h - 1 ? E : image.getRGB(y,     x + 1));
+
+                int e0, e1, e2, e3;
+
+                if (B != H && D != F)
                 {
-                    j1 = i;
+                    e0 = D == B ? D : E;
+                    e1 = B == F ? F : E;
+                    e2 = D == H ? D : E;
+                    e3 = H == F ? F : E;
                 }
                 else
                 {
-                    j1 = bufferedimage.getRGB(i3, l2 - 1);
+                    e0 = e1 = e2 = e3 = E;
                 }
 
-                int k1;
-
-                if (i3 == 0)
-                {
-                    k1 = i;
-                }
-                else
-                {
-                    k1 = bufferedimage.getRGB(i3 - 1, l2);
-                }
-
-                int l1;
-
-                if (i3 >= j2 - 1)
-                {
-                    l1 = i;
-                }
-                else
-                {
-                    l1 = bufferedimage.getRGB(i3 + 1, l2);
-                }
-
-                int i2;
-
-                if (l2 >= k2 - 1)
-                {
-                    i2 = i;
-                }
-                else
-                {
-                    i2 = bufferedimage.getRGB(i3, l2 + 1);
-                }
-
-                int j;
-                int k;
-                int l;
-                int i1;
-
-                if (j1 != i2 && k1 != l1)
-                {
-                    j = k1 != j1 ? i : k1;
-                    k = j1 != l1 ? i : l1;
-                    l = k1 != i2 ? i : k1;
-                    i1 = i2 != l1 ? i : l1;
-                }
-                else
-                {
-                    j = i;
-                    k = i;
-                    l = i;
-                    i1 = i;
-                }
-
-                bufferedimage1.setRGB(i3 * 2, l2 * 2, j);
-                bufferedimage1.setRGB(i3 * 2 + 1, l2 * 2, k);
-                bufferedimage1.setRGB(i3 * 2, l2 * 2 + 1, l);
-                bufferedimage1.setRGB(i3 * 2 + 1, l2 * 2 + 1, i1);
+                tmp.setRGB(y2,     x2,     e0);
+                tmp.setRGB(y2 + 1, x2,     e1);
+                tmp.setRGB(y2,     x2 + 1, e2);
+                tmp.setRGB(y2 + 1, x2 + 1, e3);
             }
         }
 
-        return bufferedimage1;
+        return tmp;
+    }
+
+
+    @Override
+    public String toString()
+    {
+        return String.format("ModTextureStatic %s @ %d", targetTex, iconIndex);
     }
 }

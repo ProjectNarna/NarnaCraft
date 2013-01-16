@@ -1,12 +1,14 @@
 package net.minecraft.client;
 
+import cpw.mods.fml.relauncher.FMLRelauncher;
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
 import java.applet.Applet;
 import java.awt.BorderLayout;
 import java.awt.Canvas;
-import java.io.PrintStream;
-import java.net.URL;
-import net.minecraft.src.*;
+import net.minecraft.util.Session;
 
+@SideOnly(Side.CLIENT)
 public class MinecraftApplet extends Applet
 {
     /** Reference to the applet canvas. */
@@ -16,98 +18,83 @@ public class MinecraftApplet extends Applet
     private Minecraft mc;
 
     /** Reference to the Minecraft main thread. */
-    private Thread mcThread;
-
-    public MinecraftApplet()
-    {
-        mcThread = null;
-    }
+    private Thread mcThread = null;
 
     public void init()
     {
-        mcCanvas = new CanvasMinecraftApplet(this);
-        boolean flag = false;
+        FMLRelauncher.appletEntry(this);
+    }
 
-        if (getParameter("fullscreen") != null)
+    public void fmlInitReentry()
+    {
+        this.mcCanvas = new CanvasMinecraftApplet(this);
+        boolean var1 = "true".equalsIgnoreCase(this.getParameter("fullscreen"));
+        this.mc = new MinecraftAppletImpl(this, this.mcCanvas, this, this.getWidth(), this.getHeight(), var1);
+        this.mc.minecraftUri = this.getDocumentBase().getHost();
+
+        if (this.getDocumentBase().getPort() > 0)
         {
-            flag = getParameter("fullscreen").equalsIgnoreCase("true");
+            this.mc.minecraftUri = this.mc.minecraftUri + ":" + this.getDocumentBase().getPort();
         }
 
-        mc = new MinecraftAppletImpl(this, this, mcCanvas, this, getWidth(), getHeight(), flag);
-        mc.minecraftUri = getDocumentBase().getHost();
-
-        if (!(getDocumentBase().getPort() <= 0))
+        if (this.getParameter("username") != null && this.getParameter("sessionid") != null)
         {
-            mc.minecraftUri += ":" + getDocumentBase().getPort();
-        }
-
-        if (getParameter("username") != null && getParameter("sessionid") != null)
-        {
-            mc.session = new Session(getParameter("username"), getParameter("sessionid"));
-            System.out.println((new StringBuilder()).append("Setting user: ").append(mc.session.username).append(", ").append(mc.session.sessionId).toString());
-
-            if (getParameter("mppass") != null)
-            {
-                mc.session.mpPassParameter = getParameter("mppass");
-            }
+            this.mc.session = new Session(this.getParameter("username"), this.getParameter("sessionid"));
+            System.out.println("Setting user: " + this.mc.session.username + ", " + this.mc.session.sessionId);
         }
         else
         {
-            mc.session = new Session("Player", "");
+            this.mc.session = new Session("Player", "");
         }
 
-        if (getParameter("server") != null && getParameter("port") != null)
+        this.mc.setDemo("true".equals(this.getParameter("demo")));
+
+        if (this.getParameter("server") != null && this.getParameter("port") != null)
         {
-            mc.setServer(getParameter("server"), Integer.parseInt(getParameter("port")));
+            this.mc.setServer(this.getParameter("server"), Integer.parseInt(this.getParameter("port")));
         }
 
-        mc.hideQuitButton = true;
-
-        if ("true".equals(getParameter("stand-alone")))
-        {
-            mc.hideQuitButton = false;
-        }
-
-        setLayout(new BorderLayout());
-        add(mcCanvas, "Center");
-        mcCanvas.setFocusable(true);
-        validate();
-        return;
+        this.mc.hideQuitButton = !"true".equals(this.getParameter("stand-alone"));
+        this.setLayout(new BorderLayout());
+        this.add(this.mcCanvas, "Center");
+        this.mcCanvas.setFocusable(true);
+        this.mcCanvas.setFocusTraversalKeysEnabled(false);
+        this.validate();
     }
 
     public void startMainThread()
     {
-        if (mcThread != null)
+        if (this.mcThread == null)
         {
-            return;
-        }
-        else
-        {
-            mcThread = new Thread(mc, "Minecraft main thread");
-            mcThread.start();
-            return;
+            this.mcThread = new Thread(this.mc, "Minecraft main thread");
+            this.mcThread.start();
         }
     }
 
     public void start()
     {
-        if (mc != null)
+        FMLRelauncher.appletStart(this);
+    }
+
+    public void fmlStartReentry()
+    {
+        if (this.mc != null)
         {
-            mc.isGamePaused = false;
+            this.mc.isGamePaused = false;
         }
     }
 
     public void stop()
     {
-        if (mc != null)
+        if (this.mc != null)
         {
-            mc.isGamePaused = true;
+            this.mc.isGamePaused = true;
         }
     }
 
     public void destroy()
     {
-        shutdown();
+        this.shutdown();
     }
 
     /**
@@ -115,46 +102,27 @@ public class MinecraftApplet extends Applet
      */
     public void shutdown()
     {
-        if (mcThread == null)
+        if (this.mcThread != null)
         {
-            return;
-        }
+            this.mc.shutdown();
 
-        mc.shutdown();
-
-        try
-        {
-            mcThread.join(10000L);
-        }
-        catch (InterruptedException interruptedexception)
-        {
             try
             {
-                mc.shutdownMinecraftApplet();
+                this.mcThread.join(10000L);
             }
-            catch (Exception exception)
+            catch (InterruptedException var4)
             {
-                exception.printStackTrace();
+                try
+                {
+                    this.mc.shutdownMinecraftApplet();
+                }
+                catch (Exception var3)
+                {
+                    var3.printStackTrace();
+                }
             }
+
+            this.mcThread = null;
         }
-
-        mcThread = null;
-    }
-
-    /**
-     * Removes all the components from the applet and lays it out again. Called on shutdown.
-     */
-    public void clearApplet()
-    {
-        mcCanvas = null;
-        mc = null;
-        mcThread = null;
-
-        try
-        {
-            removeAll();
-            validate();
-        }
-        catch (Exception exception) { }
     }
 }
