@@ -1,4 +1,17 @@
-Requires ModLoader.
+Requires ForgeModLoader.
 
-Features: 
- - Ruins
+Features: * = Plan
+ *1 - CopperOre spawning from level 5 to 40 in Dev (Currently not working).
+ *2 - CopperOreItem smeltable to CopperIngot in Dev (Currently not working).
+ *3 - TinOre spawning from level 5 to 40 in Dev (Currently not working).
+ *4 - TinOreItem smeltable to CopperIngot in Dev (Currently not working).
+ *5 - CopperIngot can be used with future TinIngot to create a Bronze Bar in Dev (Currently not working).
+
+
+Todo: 
+
+Plan 1 In dev
+Plan 2 In dev
+Plan 3 In dev
+Plan 4 In dev
+Plan 5 In dev
