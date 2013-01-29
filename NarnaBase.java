@@ -24,10 +24,17 @@ public class NarnaBase {
         
         @Instance("NarnaCraft")
         public static NarnaBase instance;
-
+//Normal items
         private final static Item SmashedItem = new NarnaItem(5000);
-        
-        public final static Item TinIngot = new NarnaItem(5001)
+        private final static Item CopperIngot = new NarnaItem(5001);
+        private final static Item TinIngot = new NarnaItem(5002);
+        private final static Item BronzeIngot = new NarnaItem(5003);
+        //blocks
+                private final static Block CopperBlock = new NarnaBlock(5005);
+                private final static Block TinBlock = new NarnaBlock(5006);
+                private final static Block BronzeBlock = new NarnaBlock(5007);
+           //special items     
+        public final static Item TinIngot = new NarnaItem(5004)
                 .setMaxStackSize(64).setIconIndex(0).setItemName("TinIngot");
 
         @SidedProxy(clientSide="narnacraft.mod.ClientProxy",
